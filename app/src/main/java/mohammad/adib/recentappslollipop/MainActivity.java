@@ -21,7 +21,7 @@ public class MainActivity extends Activity {
         setContentView(R.layout.activity_main);
         mRecentApps = new ArrayList<String>();
         mManager = new RecentAppsManager(this);
-        if (mManager.isPermissionGiven()) {
+        if (!mManager.isPermissionGiven()) {
             mManager.launchPermissionSettings();
         }
         mAdapter = new ArrayAdapter<String>(

@@ -68,7 +68,7 @@ public class RecentAppsManager {
      * get usage statistics
      */
     public boolean isPermissionGiven() {
-        return !getUsageEvents().hasNextEvent();
+        return getUsageEvents().hasNextEvent();
     }
 
     /**
