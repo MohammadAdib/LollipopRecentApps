@@ -2,10 +2,7 @@ package mohammad.adib.recentappslollipop;
 
 import android.app.usage.UsageEvents;
 import android.app.usage.UsageStatsManager;
-import android.content.Context;
 import android.content.Intent;
-import android.content.pm.ApplicationInfo;
-import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.os.Handler;
 import android.provider.Settings;
@@ -21,28 +18,25 @@ import java.util.List;
  * <p/>
  * 1) List of installed apps that have a launcher icon
  * 2) List of recently opened apps (24 hr)
- * 3) TODO: List of currently running app processes
  */
 public class RecentAppsManager {
 
-    private Context mContext;
-    private PackageManager mPackageManager;
     private List<RecentAppPollListener> mListeners;
     private int mInterval = 10000;
     private Handler mHandler;
     private Runnable mRunnable;
-    private String homePackage;
+    private boolean mExcludeHome;
+    private boolean mExcludeSelf;
+    private boolean mExcludeDuplicates;
 
-    public RecentAppsManager(Context context) {
-        mContext = context;
-        mPackageManager = mContext.getPackageManager();
+    public RecentAppsManager() {
         mListeners = new ArrayList<RecentAppPollListener>();
         mHandler = new Handler();
         mRunnable = new Runnable() {
             @Override
             public void run() {
                 if (!mListeners.isEmpty()) {
-                    List<String> recentAppPackages = getRecentApps();
+                    List<RecentApp> recentAppPackages = getRecentApps();
                     for (RecentAppPollListener listener : mListeners)
                         if (listener != null)
                             listener.onRecentAppsPolled(recentAppPackages);
@@ -50,17 +44,11 @@ public class RecentAppsManager {
                 }
             }
         };
-        //Get the launcher's package name
-        Intent homeIntent = new Intent(Intent.ACTION_MAIN);
-        homeIntent.addCategory(Intent.CATEGORY_HOME);
-        ResolveInfo defaultLauncher = mPackageManager.resolveActivity(homeIntent, PackageManager.MATCH_DEFAULT_ONLY);
-        homePackage = defaultLauncher.activityInfo.packageName;
     }
 
     private UsageEvents getUsageEvents() {
-        final UsageStatsManager usageStatsManager = (UsageStatsManager) mContext.getSystemService("usagestats");
-        UsageEvents events = usageStatsManager.queryEvents(System.currentTimeMillis() - 86400000, System.currentTimeMillis());
-        return events;
+        final UsageStatsManager usageStatsManager = (UsageStatsManager) App.getInstance().getSystemService("usagestats");
+        return usageStatsManager.queryEvents(System.currentTimeMillis() - 86400000, System.currentTimeMillis());
     }
 
     /**
@@ -93,33 +81,43 @@ public class RecentAppsManager {
     }
 
     /**
-     * Get a list of recently opened
-     * apps' package names
+     * Get a list of recently opened apps
      */
-    public List<String> getRecentApps() {
+    public List<RecentApp> getRecentApps() {
         UsageEvents events = getUsageEvents();
-        List<String> recentPackageNames = new ArrayList<String>();
+        List<RecentApp> recentApps = new ArrayList<RecentApp>();
         // Get apps shown in launcher
         final Intent mainIntent = new Intent(Intent.ACTION_MAIN, null);
         mainIntent.addCategory(Intent.CATEGORY_LAUNCHER);
-        final List<ResolveInfo> installedApps = mPackageManager.queryIntentActivities(mainIntent, 0);
+        final List<ResolveInfo> installedApps = App.getInstance().getPackageManager().queryIntentActivities(mainIntent, 0);
         final List<String> installedPackages = new ArrayList<String>();
         for (ResolveInfo info : installedApps)
             installedPackages.add(info.activityInfo.packageName);
-        installedPackages.remove(mContext.getPackageName());
+        if (mExcludeSelf)
+            installedPackages.remove(App.getInstance().getPackageName());
+        if (mExcludeHome)
+            installedPackages.remove(App.getInstance().homePackageName);
         // Filter out unwanted apps
         while (events.hasNextEvent()) {
             UsageEvents.Event event = new UsageEvents.Event();
             events.getNextEvent(event);
             String pkg = event.getPackageName();
-            if (recentPackageNames.contains(pkg))
-                recentPackageNames.remove(pkg);
-            if (installedPackages.contains(pkg))
-                recentPackageNames.add(pkg);
+            RecentApp app = new RecentApp(event);
+            if (installedPackages.contains(pkg)) {
+                if (mExcludeDuplicates) {
+                    for (RecentApp added : recentApps) {
+                        if (added.getPackageName().equals(pkg)) {
+                            recentApps.remove(added);
+                            break;
+                        }
+                    }
+                }
+                recentApps.add(app);
+            }
         }
-        // Most recent first
-        Collections.reverse(recentPackageNames);
-        return recentPackageNames;
+        // Sort by most recent
+        Collections.reverse(recentApps);
+        return recentApps;
     }
 
     /**
@@ -129,29 +127,34 @@ public class RecentAppsManager {
     public void launchPermissionSettings() {
         Intent intent = new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS);
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        mContext.startActivity(intent);
+        App.getInstance().startActivity(intent);
     }
 
     /**
-     * Get the name of an app from its
-     * package name
+     * Exclude the homescreen
      */
-    public String getAppNameFromPackage(String pkg) {
-        if (pkg.equals(homePackage))
-            return "Home";
-        ApplicationInfo ai;
-        try {
-            ai = mPackageManager.getApplicationInfo(pkg, 0);
-        } catch (final PackageManager.NameNotFoundException e) {
-            ai = null;
-        }
-        return (String) (ai != null ? mPackageManager.getApplicationLabel(ai) : "Unknown");
+    public void setExcludeHome(boolean excludeHome) {
+        mExcludeHome = excludeHome;
+    }
+
+    /**
+     * Exclude this app
+     */
+    public void setExcludeSelf(boolean excludeSelf) {
+        mExcludeSelf = excludeSelf;
+    }
+
+    /**
+     * Exclude duplicate events
+     */
+    public void setExcludeDuplicates(boolean excludeDuplicates) {
+        mExcludeDuplicates = excludeDuplicates;
     }
 
     /**
      * A listener interface for polling
      */
     public interface RecentAppPollListener {
-        public void onRecentAppsPolled(List<String> recentAppPackages);
+        public void onRecentAppsPolled(List<RecentApp> recentApps);
     }
 }
