@@ -28,6 +28,7 @@ public class RecentAppsManager {
     private boolean mExcludeHome;
     private boolean mExcludeSelf;
     private boolean mExcludeDuplicates;
+    private boolean mExcludeUnwanted;
 
     public RecentAppsManager() {
         mListeners = new ArrayList<RecentAppPollListener>();
@@ -103,7 +104,7 @@ public class RecentAppsManager {
             events.getNextEvent(event);
             String pkg = event.getPackageName();
             RecentApp app = new RecentApp(event);
-            if (installedPackages.contains(pkg)) {
+            if (installedPackages.contains(pkg) || !mExcludeUnwanted) {
                 if (mExcludeDuplicates) {
                     for (RecentApp added : recentApps) {
                         if (added.getPackageName().equals(pkg)) {
@@ -142,6 +143,13 @@ public class RecentAppsManager {
      */
     public void setExcludeSelf(boolean excludeSelf) {
         mExcludeSelf = excludeSelf;
+    }
+
+    /**
+     * Exclude duplicate events
+     */
+    public void setExcludeUnwanted(boolean excludeUnwanted) {
+        mExcludeUnwanted = excludeUnwanted;
     }
 
     /**

@@ -31,6 +31,7 @@ public class MainActivity extends Activity {
             Toast.makeText(this, "Please enable " + getString(R.string.app_name) + " to access your recent apps", Toast.LENGTH_LONG).show();
         }
         mManager.setExcludeDuplicates(true);
+        mManager.setExcludeUnwanted(true);
         mManager.setExcludeSelf(true);
         mAdapter = new ArrayAdapter<String>(
                 MainActivity.this,
